@@ -167,3 +167,8 @@ REGISTER_IDENTITY=true
 AGENT_ID=6482
 PINATA_JWT=        # add once you have a Pinata JWT
 ```
+
+
+## Part of Distill
+
+This agent is part of the **Distill** middleware suite. Use the Pipeline agent to chain multiple agents in one call: [Pipeline docs](https://quitx5454.github.io/pulse/docs/pipeline.html).
