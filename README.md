@@ -68,6 +68,75 @@ Content-Type: application/json
 If the Pinata upload fails (or `PINATA_JWT` is unset), Forge returns
 `ready_to_sign: false` with an `error` and the computed `feedback_hash`.
 
+## Distill Standard Envelope
+
+Every agent in the Distill ecosystem accepts an **optional** standard envelope on input and **always** returns the standard envelope on output. It applies to **both** entrypoints (`/entrypoints/forge/invoke` and `/entrypoints/trace/invoke`) and is fully backward compatible: existing (legacy) requests keep working unchanged.
+
+### Input — envelope mode
+
+Wrap your normal input in `payload`:
+
+```json
+{
+  "distill_version": "1.0",
+  "agent_id": "6482",
+  "session_id": "test-session-001",
+  "payload": {
+    "agent_id": "6482",
+    "task": "blockchain data cleaning",
+    "tx_hash": "0xabc...",
+    "score": 95
+  }
+}
+```
+
+`distill_version`, `agent_id`, and `session_id` are all optional. If `session_id` is omitted, a UUID is generated for you (`crypto.randomUUID()`).
+
+### Input — legacy mode (backward compatible)
+
+Send your input directly, with no wrapper — exactly as before:
+
+```json
+{
+  "agent_id": "6482",
+  "task": "blockchain data cleaning",
+  "tx_hash": "0xabc...",
+  "score": 95
+}
+```
+
+### Output — always enveloped
+
+Both input modes produce the same envelope response:
+
+```json
+{
+  "distill_version": "1.0",
+  "agent_id": "6482",
+  "session_id": "test-session-001",
+  "status": "ok",
+  "output": {
+    "feedback_hash": "0x...",
+    "ipfs_uri": "ipfs://Qm...",
+    "contract_payload": "0x...",
+    "ready_to_sign": true
+  },
+  "processed_at": "2026-06-02T16:21:11.827Z"
+}
+```
+
+| field          | notes                                                |
+| -------------- | ---------------------------------------------------- |
+| `status`       | `"ok"` or `"error"`                                  |
+| `agent_id`     | echoed from the request, or `null` in legacy mode    |
+| `session_id`   | from the request, or a generated UUID                |
+| `output`       | the agent's normal output (forge or trace result)    |
+| `processed_at` | ISO 8601 timestamp                                   |
+
+> The Lucid runtime nests this envelope under the top-level `output` field of its HTTP response: `{ "run_id": "...", "status": "succeeded", "output": { ...envelope... } }`.
+
+The envelope helpers live in `src/lib/envelope.ts` (`parseEnvelope`, `wrapResponse`, `withEnvelope`). Run `bun run test-envelope.ts` to exercise both entrypoints in both modes.
+
 ## Develop
 
 ```bash
