@@ -11,6 +11,7 @@ import { x402ResourceServer, HTTPFacilitatorClient } from "@x402/core/server";
 import { registerExactEvmScheme } from "@x402/evm/exact/server";
 import { getAuthHeaders } from "@coinbase/cdp-sdk/auth";
 import { forge, type ForgeInput, AGENT_REGISTRY_ADDRESS } from "./forge";
+import { processTrace, type TraceInput } from "./trace";
 
 const CHAIN_ID = parseInt(process.env.CHAIN_ID ?? "8453"); // Base Mainnet
 const RPC_URL = process.env.RPC_URL ?? "https://mainnet.base.org";
@@ -153,6 +154,15 @@ app.use(paymentMiddleware({
     }],
     description: "Generate an ERC-8004 on-chain feedback payload (hash + IPFS + giveFeedback calldata)",
   },
+  "/entrypoints/trace/invoke": {
+    accepts: [{
+      scheme: "exact",
+      price: "$0.01",
+      network: "eip155:8453",
+      payTo: process.env.PAYMENTS_RECEIVABLE_ADDRESS as `0x${string}`,
+    }],
+    description: "Parse a raw agent execution log into structured steps + a forge_ready block (suggested score & tags)",
+  },
 }, resourceServer));
 
 // ── Forge entrypoint ──────────────────────────────────────────
@@ -177,6 +187,26 @@ addEntrypoint({
     const input = ctx.input as ForgeInput;
     const clientAddress = process.env.PAYMENTS_RECEIVABLE_ADDRESS ?? "";
     const output = await forge(input, clientAddress);
+    return { output };
+  },
+});
+
+// ── Trace entrypoint ──────────────────────────────────────────
+// An empty/whitespace log is rejected here as a 400 (invalid_input);
+// deeper parsing + the failed-output fallback live in processTrace().
+const traceInputSchema = z.object({
+  log: z.string().refine((v) => v.trim().length > 0, { message: "log is required and cannot be empty" }),
+  format: z.enum(["auto", "plaintext", "json", "opentelemetry", "langchain", "openai"]).optional(),
+  session_id: z.string().optional(),
+  agent_id: z.string().optional(),
+}).passthrough();
+
+addEntrypoint({
+  key: "trace",
+  description: "Normalize a raw agent execution log into structured steps + summary, and emit a forge_ready block (suggested ERC-8004 score & tags)",
+  input: traceInputSchema,
+  handler: async (ctx) => {
+    const output = await processTrace(ctx.input as TraceInput);
     return { output };
   },
 });
