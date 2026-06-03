@@ -30,6 +30,7 @@
     "ethers": "^6.13.0",
     "express": "^4.19.2",
     "fast-json-stable-stringify": "^2.1.0",
+    "json-canonicalize": "^2.0.0",
     "zod": "^4.1.12"
   },
   "devDependencies": {

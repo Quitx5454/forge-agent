@@ -13,6 +13,8 @@ import { getAuthHeaders } from "@coinbase/cdp-sdk/auth";
 import { forge, type ForgeInput, AGENT_REGISTRY_ADDRESS } from "./forge";
 import { processTrace, type TraceInput } from "./trace";
 import { parseEnvelope, wrapResponse, withEnvelope } from "./envelope";
+import forgeCard from "../../agent-card.json";
+import traceCard from "../../trace-agent-card.json";
 
 const CHAIN_ID = parseInt(process.env.CHAIN_ID ?? "8453"); // Base Mainnet
 const RPC_URL = process.env.RPC_URL ?? "https://mainnet.base.org";
@@ -80,6 +82,17 @@ const { app, addEntrypoint } = await createAgentApp(agent);
 
 // NOTE: CORS is handled by the wrapper Express app in src/index.ts so it runs
 // before this agent app's x402 payment middleware (and OPTIONS preflights).
+
+// A2A Agent Cards — public, static, no payment wall. This repo hosts two
+// agents (Forge + Trace), so it serves two cards. Registered before the
+// paymentMiddleware below (which is scoped to the invoke paths anyway) so
+// these routes are always reachable without a PAYMENT-SIGNATURE.
+app.get("/.well-known/agent-card.json", (_req: any, res: any) => {
+  res.type("application/json").send(JSON.stringify(forgeCard));
+});
+app.get("/.well-known/trace-agent-card.json", (_req: any, res: any) => {
+  res.type("application/json").send(JSON.stringify(traceCard));
+});
 
 // ── x402 payment wall — declared BEFORE addEntrypoint ─────────
 const CDP_HOST = "api.cdp.coinbase.com";

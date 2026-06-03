@@ -1,0 +1,77 @@
+{
+  "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+  "protocolVersion": "1.0",
+  "name": "Forge",
+  "description": "Compiles ERC-8004 on-chain reputation proofs: canonical feedback JSON, KECCAK-256 hash, IPFS pin, and ABI-encoded giveFeedback() calldata ready to sign.",
+  "version": "1.0.0",
+  "url": "https://forge-agent-production.up.railway.app",
+  "provider": {
+    "organization": "Distill",
+    "url": "https://quitx5454.github.io/pulse"
+  },
+  "endpoints": [
+    {
+      "name": "invoke",
+      "url": "https://forge-agent-production.up.railway.app/entrypoints/forge/invoke",
+      "method": "POST",
+      "protocolBinding": "HTTP+JSON"
+    }
+  ],
+  "capabilities": {
+    "streaming": false,
+    "pushNotifications": false,
+    "stateTransitionHistory": false
+  },
+  "defaultInputModes": ["application/json"],
+  "defaultOutputModes": ["application/json"],
+  "skills": [
+    {
+      "id": "forge-feedback",
+      "name": "Forge ERC-8004 Feedback Proof",
+      "description": "Compile an ERC-8004 on-chain reputation proof: canonical feedback JSON, KECCAK-256 hash, IPFS pin, and ABI-encoded giveFeedback() calldata ready to sign.",
+      "tags": ["erc-8004", "reputation", "ipfs", "keccak-256", "calldata", "base"],
+      "inputModes": ["application/json"],
+      "outputModes": ["application/json"]
+    }
+  ],
+  "securitySchemes": {
+    "x402_commerce": {
+      "type": "apiKey",
+      "in": "header",
+      "name": "PAYMENT-SIGNATURE",
+      "description": "x402 micropayment signature settled on Base Mainnet via the Coinbase CDP facilitator."
+    }
+  },
+  "security": [{ "x402_commerce": [] }],
+  "registrations": [
+    {
+      "agentRegistry": "eip155:8453:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
+    }
+  ],
+  "extensions": {
+    "payment_required": {
+      "protocol": "x402",
+      "network": "eip155:8453",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "payTo": "0x104b5768FE505c400dd98F447665CB5c6fca388A",
+      "maxAmountRequired": "20000",
+      "price": "0.02 USDC"
+    },
+    "bazaar": {
+      "accepts": [
+        {
+          "scheme": "exact",
+          "network": "eip155:8453",
+          "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "payTo": "0x104b5768FE505c400dd98F447665CB5c6fca388A",
+          "maxAmountRequired": "20000",
+          "maxTimeoutSeconds": 60,
+          "resource": "https://forge-agent-production.up.railway.app/entrypoints/forge/invoke",
+          "description": "Generate an ERC-8004 on-chain feedback payload (hash + IPFS + giveFeedback calldata).",
+          "mimeType": "application/json"
+        }
+      ]
+    }
+  },
+  "signatures": []
+}
