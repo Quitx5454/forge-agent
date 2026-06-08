@@ -1,11 +1,10 @@
 import express from 'express';
 import { app as agentApp } from './lib/agent';
-import forgeCard from '../agent-card.json';
 import traceCard from '../trace-agent-card.json';
 
 const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 
-console.log(`Starting Forge agent server on port ${port}...`);
+console.log(`Starting Trace agent server on port ${port}...`);
 
 // CORS runs FIRST — before the Lucid agent app and its x402 payment middleware —
 // so browser clients can read the PAYMENT-REQUIRED header and OPTIONS preflights
@@ -19,12 +18,13 @@ wrapper.use((req, res, next) => {
   if (req.method === "OPTIONS") return res.status(200).end();
   next();
 });
-// Public A2A Agent Cards — static, no payment wall. Registered on the wrapper
+// Public A2A Agent Card — static, no payment wall. Registered on the wrapper
 // BEFORE the agent app so agent-card.json takes precedence over the manifest
-// that Lucid's createAgentApp() serves at this same path. This repo hosts two
-// agents, so it serves two cards: Forge and Trace.
+// that Lucid's createAgentApp() serves at this same path. This service hosts the
+// Trace agent; the card is served at agent-card.json and mirrored at the legacy
+// trace-agent-card.json path for backward compatibility.
 wrapper.get('/.well-known/agent-card.json', (_req, res) => {
-  res.type('application/json').send(JSON.stringify(forgeCard));
+  res.type('application/json').send(JSON.stringify(traceCard));
 });
 wrapper.get('/.well-known/trace-agent-card.json', (_req, res) => {
   res.type('application/json').send(JSON.stringify(traceCard));

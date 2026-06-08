@@ -14,7 +14,7 @@
   },
   "include": [
     "src/**/*",
-    "test-forge.ts",
-    "test-trace.ts"
+    "test-trace.ts",
+    "test-envelope.ts"
   ]
 }

@@ -11,12 +11,16 @@ import { x402ResourceServer, HTTPFacilitatorClient } from "@x402/core/server";
 import { registerExactEvmScheme } from "@x402/evm/exact/server";
 import { bazaarResourceServerExtension, declareDiscoveryExtension } from "@x402/extensions/bazaar";
 import { getAuthHeaders } from "@coinbase/cdp-sdk/auth";
-import { forge, type ForgeInput, AGENT_REGISTRY_ADDRESS } from "./forge";
 import { processTrace, type TraceInput } from "./trace";
 import { parseEnvelope, wrapResponse, withEnvelope } from "./envelope";
 
 const CHAIN_ID = parseInt(process.env.CHAIN_ID ?? "8453"); // Base Mainnet
 const RPC_URL = process.env.RPC_URL ?? "https://mainnet.base.org";
+
+// Base-Mainnet ERC-8004 Identity/Agent registry address. (Previously exported
+// from ./forge, which has been removed along with the deprecated Forge agent —
+// the constant lives here now since Trace still registers its identity.)
+const AGENT_REGISTRY_ADDRESS = "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432";
 
 // Resolve the agent wallet private key (PRIVATE_KEY is the canonical name;
 // the *_WALLET_PRIVATE_KEY variants are kept for parity with sibling agents).
@@ -28,11 +32,11 @@ const PK = RAW_PK ? (RAW_PK.startsWith("0x") ? RAW_PK : `0x${RAW_PK}`) : undefin
 const AGENT_ADDRESS = PK ? new ethers.Wallet(PK).address : undefined;
 
 const agent = await createAgent({
-  name: process.env.AGENT_NAME ?? "forge",
+  name: process.env.AGENT_NAME ?? "trace",
   version: process.env.AGENT_VERSION ?? "0.1.0",
   description:
     process.env.AGENT_DESCRIPTION ??
-    "Generates ERC-8004 on-chain feedback payloads: canonical feedback JSON, keccak-256 hash, IPFS pin, and ABI-encoded giveFeedback() calldata ready to sign",
+    "Normalizes raw agent execution logs into structured steps + summary, and emits a forge_ready block (suggested ERC-8004 score & tags)",
 })
   .use(http())
   .use(
@@ -81,9 +85,9 @@ const { app, addEntrypoint } = await createAgentApp(agent);
 
 // NOTE: CORS is handled by the wrapper Express app in src/index.ts so it runs
 // before this agent app's x402 payment middleware (and OPTIONS preflights).
-// The public A2A card routes (/.well-known/agent-card.json for Forge and
-// /.well-known/trace-agent-card.json for Trace) are also served from the
-// wrapper, since agent-card.json must take precedence over the manifest that
+// The public A2A card route (/.well-known/agent-card.json for Trace, also
+// mirrored at /.well-known/trace-agent-card.json) is served from the wrapper,
+// since agent-card.json must take precedence over the manifest that
 // createAgentApp() registers internally at that same path.
 
 // ── x402 payment wall — declared BEFORE addEntrypoint ─────────
@@ -110,9 +114,9 @@ const facilitator = new HTTPFacilitatorClient({
 const resourceServer = new x402ResourceServer(facilitator);
 registerExactEvmScheme(resourceServer);
 // x402 Bazaar discovery extension — registered explicitly BEFORE the payment
-// middleware so the CDP facilitator indexes both endpoints (forge + trace) into
-// the Bazaar catalog. Per-route schemas are declared in each route's
-// `extensions` block below (declareDiscoveryExtension).
+// middleware so the CDP facilitator indexes the trace endpoint into the Bazaar
+// catalog. The per-route schema is declared in the route's `extensions` block
+// below (declareDiscoveryExtension).
 resourceServer.registerExtension(bazaarResourceServerExtension);
 
 // Decode PAYMENT-REQUIRED header into the body so crawlers like xgate can
@@ -156,63 +160,6 @@ app.use((_req: any, res: any, next: any) => {
 });
 
 app.use(paymentMiddleware({
-  "/entrypoints/forge/invoke": {
-    accepts: [{
-      scheme: "exact",
-      price: "$0.02",
-      network: "eip155:8453",
-      payTo: process.env.PAYMENTS_RECEIVABLE_ADDRESS as `0x${string}`,
-    }],
-    description: "Generate an ERC-8004 on-chain feedback payload (hash + IPFS + giveFeedback calldata)",
-    extensions: declareDiscoveryExtension({
-      bodyType: "json",
-      input: {
-        agent_id: "6482",
-        chain_id: 8453,
-        task: "blockchain data cleaning",
-        response_latency_ms: 1200,
-        usdc_paid: "20000",
-        tx_hash: "0xabc0000000000000000000000000000000000000000000000000000000000000",
-        success: true,
-        score: 95,
-      },
-      inputSchema: {
-        $schema: "https://json-schema.org/draft/2020-12/schema",
-        type: "object",
-        properties: {
-          agent_id: { type: ["string", "number"], description: "Numeric ERC-8004 agent id" },
-          chain_id: { type: "number" },
-          task: { type: "string" },
-          response_latency_ms: { type: "number" },
-          usdc_paid: { type: "string", description: "Amount in USDC base units (6 decimals)" },
-          tx_hash: { type: "string" },
-          success: { type: "boolean" },
-          score: { type: "number", minimum: 0, maximum: 100 },
-        },
-        required: ["agent_id", "task", "tx_hash", "score"],
-        additionalProperties: true,
-      },
-      output: {
-        example: {
-          feedback_hash: "0x9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a",
-          ipfs_uri: "ipfs://QmExampleFeedbackDocumentHashHere000000000000000000",
-          contract_payload: "0xabcdef00",
-          ready_to_sign: true,
-        },
-        schema: {
-          $schema: "https://json-schema.org/draft/2020-12/schema",
-          type: "object",
-          properties: {
-            feedback_hash: { type: "string", description: "keccak-256 of the canonical feedback JSON" },
-            ipfs_uri: { type: "string" },
-            contract_payload: { type: "string", description: "ABI-encoded giveFeedback() calldata" },
-            ready_to_sign: { type: "boolean" },
-          },
-          required: ["feedback_hash", "ipfs_uri", "contract_payload", "ready_to_sign"],
-        },
-      },
-    }),
-  },
   "/entrypoints/trace/invoke": {
     accepts: [{
       scheme: "exact",
@@ -304,34 +251,6 @@ app.use(paymentMiddleware({
     }),
   },
 }, resourceServer));
-
-// ── Forge entrypoint ──────────────────────────────────────────
-// Input is validated inside forge() so we can return ERC-8004-specific
-// error messages; the zod schema here only enforces the JSON shape.
-const inputSchema = z.object({
-  agent_id: z.union([z.string(), z.number()]),
-  chain_id: z.number().optional(),
-  task: z.string(),
-  response_latency_ms: z.number().optional(),
-  usdc_paid: z.string().optional(),
-  tx_hash: z.string(),
-  success: z.boolean().optional(),
-  score: z.number(),
-}).passthrough();
-
-addEntrypoint({
-  key: "forge",
-  description: "Produce an ERC-8004 feedback document, its keccak-256 hash, an IPFS pin, and ABI-encoded giveFeedback() calldata",
-  // Accept either the Distill envelope ({ ..., payload: <ForgeInput> }) or the
-  // legacy bare ForgeInput. The handler unwraps via parseEnvelope.
-  input: withEnvelope(inputSchema),
-  handler: async (ctx) => {
-    const { payload, sessionId, agentId } = parseEnvelope<ForgeInput>(ctx.input);
-    const clientAddress = process.env.PAYMENTS_RECEIVABLE_ADDRESS ?? "";
-    const output = await forge(payload, clientAddress);
-    return { output: wrapResponse(output, sessionId, agentId, "ok") };
-  },
-});
 
 // ── Trace entrypoint ──────────────────────────────────────────
 // An empty/whitespace log is rejected here as a 400 (invalid_input);

@@ -5,7 +5,6 @@ dist/
 *.log
 .data/
 
-# Build artifacts — canonical (RFC 8785) form of the agent cards, regenerated
-# by scripts/canonicalize-card.ts. Not source. This repo serves two cards.
-agent-card.canonical.json
+# Build artifact — canonical (RFC 8785) form of the agent card, regenerated
+# by scripts/canonicalize-card.ts. Not source.
 trace-agent-card.canonical.json
